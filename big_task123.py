@@ -1,63 +1,77 @@
+import sys
 import pygame
 import requests
-import os
-import sys
+from PIL import Image
+from io import BytesIO
 
-# Координты центра области, которую отображаем
-coords = ",".join(input("Введите координаты отображения карты(2 вещественных числа через пробел в порядке 'широта_долгота'): ").split())
-# Масштабирование карты
+
+def convert_bytes(bytes_stream):
+    image = Image.open(BytesIO(bytes_stream)).convert("RGB")
+    mode = image.mode
+    size = image.size
+    data = image.tobytes()
+    return pygame.image.frombuffer(data, size, mode)
+
+
+print("Введите начальные координаты")
+
+lon = input("Широта: ")
+lon = "44.99142" if not lon.strip() else lon
+
+lat = input("Долгота: ")
+lat = "53.198705" if not lat.strip() else lat
+
 z = input("Задайте масштабирование(число 0 <= z <= 17): ")
+z = "14" if not z else z
 
-# Инициализируем pygame
+api_server = "http://static-maps.yandex.ru/1.x/?"
+
 pygame.init()
 screen = pygame.display.set_mode((600, 450))
 running = True
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
-        coords = coords.split(",")
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_PAGEUP and int(z) < 17:
-            z = str(int(z)+1)
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_PAGEDOWN and int(z) > 0:
-            z = str(int(z)-1)
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_DOWN and float(coords[0]) > 1:
-            coords[1] = str(float(coords[1])-(18-int(z))**2*0.0005)
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_UP and float(coords[0]) < 179:
-            coords[1] = str(float(coords[1])+(18-int(z))**2*0.0005)
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_LEFT and float(coords[1]) > -89:
-            coords[0] = str(float(coords[0])-(18-int(z))**2*0.0005)
-        if event.type == pygame.KEYDOWN and event.key == pygame.K_RIGHT and float(coords[1]) < 89:
-            coords[0] = str(float(coords[0])+(18-int(z))**2*0.0005)
-        coords = ",".join(coords)
-        map_request = "http://static-maps.yandex.ru/1.x/?ll={}&z={}&size=600,450&l=sat,skl".format(coords, z)
-        response = None
+
+        if event.type == pygame.KEYDOWN:
+
+            if event.key == pygame.K_PAGEUP and int(z) < 17:
+                z = str(int(z) + 1)
+            elif event.key == pygame.K_PAGEDOWN and int(z) > 0:
+                z = str(int(z) - 1)
+
+            if event.key == pygame.K_LEFT and float(lon) > 1:
+                lon = str(float(lon)-(18-int(z))**2*0.0005)
+            elif event.key == pygame.K_RIGHT and float(lon) < 179:
+                lon = str(float(lon)+(18-int(z))**2*0.0005)
+
+            if event.key == pygame.K_DOWN and float(lat) > -89:
+                lat = str(float(lat)-(18-int(z))**2*0.0005)
+            elif event.key == pygame.K_UP and float(lat) < 89:
+                lat = str(float(lat)+(18-int(z))**2*0.0005)
+
+        params = {
+            "l": "sat,skl",
+            "ll": ",".join([lon, lat]),
+            "z": z
+        }
 
         try:
-            response = requests.get(map_request)
+            response = requests.get(api_server, params=params)
 
             if not response:
-                print("Ошибка выполнения запроса:")
-                print(map_request)
+                print("Ошибка выполнения запроса")
                 print("Http статус:", response.status_code, "(", response.reason, ")")
                 sys.exit(1)
         except:
             print("Запрос не удалось выполнить. Проверьте наличие сети Интернет.")
             sys.exit(1)
 
-        map_file = "map.png"
+        map_image = convert_bytes(response.content)
 
-        try:
-            with open(map_file, "wb") as file:
-                file.write(response.content)
-        except IOError as ex:
-            print("Ошибка записи временного файла:", ex)
-            sys.exit(2)
-        # Рисуем картинку, загружаемую из только что созданного файла.
-        screen.blit(pygame.image.load(map_file), (0, 0))
-        # Переключаем экран и ждем закрытия окна.
+        screen.blit(map_image, (0, 0))
         pygame.display.flip()
-pygame.quit()
 
-# Удаляем за собой файл с изображением.
-os.remove(map_file)
+pygame.quit()
