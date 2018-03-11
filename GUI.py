@@ -128,14 +128,18 @@ class TextBox(Label):
     def __init__(self, rect, rect_color, text, font_color):
         super().__init__(rect, rect_color, text, font_color)
         self.active = False
+        self.done = False
         self.blink = False
         self.blink_timer = 0
 
     def get_event(self, event):
+        if self.done:
+            self.done = False
+            self.text = ""
         if event.type == pygame.KEYDOWN and self.active:
             if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.active = False
-                self.text = ""
+                self.done = True
             elif event.key == pygame.K_BACKSPACE:
                 if len(self.text) > 0:
                     self.text = self.text[:-1]
@@ -156,4 +160,4 @@ class TextBox(Label):
         if self.active and self.blink:
             pygame.draw.line(surface, [255 - self.font_color[c] for c in range(3)],
                              (self.rendered_rect.right + 2, self.rendered_rect.top + 2),
-                             (self.rendered_rect.right + 2, self.rendered_rect.bottom - 2))
+                             (self.rendered_rect.right + 2, self.rendered_rect.bottom - 2), 2)

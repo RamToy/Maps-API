@@ -1,6 +1,7 @@
 import os
 import sys
 import requests
+import pprint
 from Projects.Maps_API.GUI import *
 from PIL import Image
 from io import BytesIO
@@ -18,23 +19,24 @@ class Maps:
     def __init__(self):
         self.lon = "44.99142"
         self.lat = "53.198705"
-        self.mode = "map"
+        self.mode = "sat,skl"
         self.z = "4"
-        self.api_server = "http://static-maps.yandex.ru/1.x/?"
         self.bg_color = 83, 29, 18
         self.fg_color = 233, 230, 0
         self.map_image = None
         self.press1 = False
         self.press2 = False
+        self.search_request = ""
 
-    def new_request(self):
+    def new_static_request(self):
+        static_api_server = "http://static-maps.yandex.ru/1.x/"
         params = {
             "l": self.mode,
             "ll": ",".join([self.lon, self.lat]),
             "z": self.z
         }
         try:
-            response = requests.get(self.api_server, params=params)
+            response = requests.get(static_api_server, params=params)
             if not response:
                 print("Ошибка выполнения запроса")
                 print("Http статус:", response.status_code, "(", response.reason, ")")
@@ -44,19 +46,36 @@ class Maps:
             print("Запрос не удалось выполнить. Проверьте наличие сети Интернет.")
             sys.exit(1)
 
+    def new_geocoder_request(self):
+        geocode_api_server = "https://geocode-maps.yandex.ru/1.x/"
+        params = {
+            "geocode": self.search_request,
+            "format": "json"
+        }
+        try:
+            response = requests.get(geocode_api_server, params=params)
+            if not response:
+                print("Ошибка выполнения запроса:")
+                print(self.search_request)
+                print("Http статус:", response.status_code, "(", response.reason, ")")
+                sys.exit(1)
+            json_response = response.json()
+            self.lon, self.lat = json_response["response"]["GeoObjectCollection"]["featureMember"][0]\
+                                              ["GeoObject"]["Point"]["pos"].split()
+        except IndexError:
+            print("Результатов не найдено")
+        except:
+            print("Запрос не удалось выполнить. Проверьте наличие сети Интернет.")
+            sys.exit(1)
+
     def change_mode(self, direction):
         modes = ["map", "sat", "sat,skl"]
-        mode_index = modes.index(self.mode)
-        if direction > 0:
-            if mode_index >= 2:
-                self.mode = modes[0]
-            else:
-                self.mode = modes[mode_index + 1]
-        elif direction < 0:
-            if mode_index <= 0:
-                self.mode = modes[2]
-            else:
-                self.mode = modes[mode_index - 1]
+        mode_index = modes.index(self.mode) + direction
+        if mode_index > 2:
+            mode_index = 0
+        elif mode_index < 0:
+            mode_index = 2
+        self.mode = modes[mode_index]
 
     def main(self):
         clock = pygame.time.Clock()
@@ -69,7 +88,7 @@ class Maps:
         left_mode = ImageButton((640, 170, 34, 54), self.fg_color, left_arrow, True)
         right_mode = ImageButton((846, 170, 34, 54), self.fg_color, right_arrow, True)
         current_mode = Label((685, 170, 152, 54), self.fg_color, self.mode, self.bg_color, True)
-        search_textbox = TextBox((75, 23, 650, 74), -1, "", (200, 200, 0))
+        search_textbox = TextBox((75, 33, 650, 54), -1, "", (200, 200, 0))
 
         gui.add_element(search_button)
         gui.add_element(left_mode)
@@ -77,7 +96,7 @@ class Maps:
         gui.add_element(current_mode)
         gui.add_element(search_textbox)
 
-        self.map_image = self.new_request()
+        self.map_image = self.new_static_request()
 
         while running:
             for event in pygame.event.get():
@@ -103,25 +122,32 @@ class Maps:
                     elif event.key == pygame.K_UP and float(self.lat) < 89:
                         self.lat = str(float(self.lat) + shift)
 
-                    self.map_image = self.new_request()
+                    self.map_image = self.new_static_request()
 
                 gui.get_event(event)
 
             if left_mode.pressed and not self.press1:
                 self.change_mode(-1)
-                self.map_image = self.new_request()
+                self.map_image = self.new_static_request()
                 current_mode.text = self.mode
                 self.press1 = True
             elif not left_mode.pressed and self.press1:
                 self.press1 = False
-
             if right_mode.pressed and not self.press2:
-                self.change_mode(-1)
-                self.map_image = self.new_request()
+                self.change_mode(1)
+                self.map_image = self.new_static_request()
                 current_mode.text = self.mode
                 self.press2 = True
             elif not right_mode.pressed and self.press2:
                 self.press2 = False
+
+            if search_button.pressed:
+                search_textbox.done = True
+
+            if search_textbox.done and search_textbox.text:
+                self.search_request = search_textbox.text
+                self.new_geocoder_request()
+                self.map_image = self.new_static_request()
 
             gui.update()
             screen.fill(self.bg_color)
