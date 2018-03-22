@@ -40,16 +40,51 @@ class Label:
         self.font = pygame.font.Font(None, self.rect.height - 4)
         self.rendered_text = None
         self.rendered_rect = None
+        self.optimal_font_size = False
 
     def render(self, surface):
         if self.rect_color != -1:
             surface.fill(self.rect_color, self.rect)
-        self.rendered_text = self.font.render(self.text, 10, self.font_color)
-        if self.center:
-            self.rendered_rect = self.rendered_text.get_rect(center=self.rect.center)
+
+        if self.font.size(self.text)[0] > self.rect.width:
+
+            if not self.optimal_font_size:
+                self.set_font_size(self.rect.height // (self.font.size(self.text)[0] // self.rect.width + 1))
+                self.optimal_font_size = True
+
+            lines = self.line_break()
+            for i in range(len(lines)):
+                self.rendered_text = self.font.render(lines[i], 1, self.font_color)
+                self.rendered_rect = self.rendered_text.get_rect(centerx=self.rect.centerx,
+                                                                 y=self.rect.y+(self.rect.height//len(lines)*i)+15)
+                surface.blit(self.rendered_text, self.rendered_rect)
+
         else:
-            self.rendered_rect = self.rendered_text.get_rect(x=self.rect.x + 2, centery=self.rect.centery)
-        surface.blit(self.rendered_text, self.rendered_rect)
+            self.rendered_text = self.font.render(self.text, 1, self.font_color)
+            if self.center:
+                self.rendered_rect = self.rendered_text.get_rect(center=self.rect.center)
+            else:
+                self.rendered_rect = self.rendered_text.get_rect(x=self.rect.x + 2, centery=self.rect.centery)
+            surface.blit(self.rendered_text, self.rendered_rect)
+
+    def set_font_size(self, size):
+        if size == -1:
+            self.font = pygame.font.Font(None, self.rect.height - 4)
+            self.optimal_font_size = False
+        else:
+            self.font = pygame.font.Font(None, size)
+
+    def line_break(self):
+        lines, cur_text = [], ""
+        for toponym in self.text.split():
+            toponym += " "
+            if self.font.size(cur_text + toponym)[0] > self.rect.width:
+                lines.append(cur_text)
+                cur_text = toponym
+            else:
+                cur_text += toponym
+        lines.append(cur_text)
+        return lines
 
 
 class Button(Label):
@@ -125,8 +160,8 @@ class ImageButton:
 
 
 class TextBox(Label):
-    def __init__(self, rect, rect_color, text, font_color):
-        super().__init__(rect, rect_color, text, font_color)
+    def __init__(self, rect, rect_color, font_color):
+        super().__init__(rect, rect_color, "", font_color)
         self.active = False
         self.done = False
         self.blink = False
@@ -138,20 +173,19 @@ class TextBox(Label):
             self.text = ""
         if event.type == pygame.KEYDOWN and self.active:
             if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                self.active = False
                 self.done = True
             elif event.key == pygame.K_BACKSPACE:
                 if len(self.text) > 0:
                     self.text = self.text[:-1]
             else:
                 self.text += event.unicode
-                if self.rendered_rect.width > self.rect.width:
+                if self.font.size(self.text)[0] >= self.rect.width:
                     self.text = self.text[:-1]
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self.active = self.rect.collidepoint(*event.pos)
 
     def update(self):
-        if pygame.time.get_ticks() - self.blink_timer > 200:
+        if pygame.time.get_ticks() - self.blink_timer > 300:
             self.blink = not self.blink
             self.blink_timer = pygame.time.get_ticks()
 
