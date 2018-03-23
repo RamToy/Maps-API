@@ -1,7 +1,8 @@
 import os
 import requests
-from Projects.Maps_API.GUI import *
+from GUI import *
 from PIL import Image
+import pygame
 from io import BytesIO
 
 
@@ -115,16 +116,19 @@ class Maps:
                     elif event.key == pygame.K_PAGEDOWN and int(self.z) > 2:
                         self.z = str(int(self.z) - 1)
 
-                    shift = round((18 - int(self.z)) * (0.0001 * (18 - int(self.z))), 4)
+                    shift = {"1": 30, "2": 25, "3":20, "4":15, "5": 8,
+                             "6": 4, "7": 2, "8": 1, "9": 0.5,
+                             "10": 0.25, "11": 0.1, "12": 0.05, "13": 0.025,
+                             "14": 0.01, "15": 0.005, "16": 0.0025, "17": 0.001}
                     if event.key == pygame.K_LEFT and float(self.lon) > 1:
-                        self.lon = str(float(self.lon) - shift)
+                        self.lon = str(float(self.lon) - shift[self.z])
                     elif event.key == pygame.K_RIGHT and float(self.lon) < 179:
-                        self.lon = str(float(self.lon) + shift)
+                        self.lon = str(float(self.lon) + shift[self.z])
 
                     if event.key == pygame.K_DOWN and float(self.lat) > -89:
-                        self.lat = str(float(self.lat) - shift)
+                        self.lat = str(float(self.lat) - shift[self.z])
                     elif event.key == pygame.K_UP and float(self.lat) < 89:
-                        self.lat = str(float(self.lat) + shift)
+                        self.lat = str(float(self.lat) + shift[self.z])
 
                     self.map_image = self.static_request()
 
