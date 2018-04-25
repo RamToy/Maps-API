@@ -67,7 +67,7 @@ class Label:
                 self.rendered_rect = self.rendered_text.get_rect(x=self.rect.x + 2, centery=self.rect.centery)
             surface.blit(self.rendered_text, self.rendered_rect)
 
-    def set_font_size(self, size):
+    def set_font_size(self, size=-1):
         if size == -1:
             self.font = pygame.font.Font(None, self.rect.height - 4)
             self.optimal_font_size = False
@@ -85,6 +85,13 @@ class Label:
                 cur_text += toponym
         lines.append(cur_text)
         return lines
+
+    def set_text(self, text):
+        if type(text) is str:
+            self.text = text
+
+    def get_text(self):
+        return self.text
 
 
 class Button(Label):
@@ -116,6 +123,9 @@ class Button(Label):
             self.pressed = self.rect.collidepoint(*event.pos)
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             self.pressed = False
+
+    def get_pressed(self):
+        return self.pressed
 
 
 class ImageButton:
@@ -158,29 +168,50 @@ class ImageButton:
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             self.pressed = False
 
+    def get_pressed(self):
+        return self.pressed
+
 
 class TextBox(Label):
-    def __init__(self, rect, rect_color, font_color):
+    def __init__(self, rect, rect_color, font_color, max_len=-1):
         super().__init__(rect, rect_color, "", font_color)
+
+        self.max_len = self.rect.width - 2 if max_len < 1 else max_len
         self.active = False
+        self.blink = True
         self.done = False
-        self.blink = False
         self.blink_timer = 0
+        self.cursor_pos = 0
 
     def get_event(self, event):
         if self.done:
             self.done = False
             self.text = ""
+
         if event.type == pygame.KEYDOWN and self.active:
+
             if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self.done = True
+                self.active = False
+
             elif event.key == pygame.K_BACKSPACE:
                 if len(self.text) > 0:
                     self.text = self.text[:-1]
-            else:
-                self.text += event.unicode
-                if self.font.size(self.text)[0] >= self.rect.width:
-                    self.text = self.text[:-1]
+
+            elif event.key == pygame.K_LEFT:
+                self.cursor_pos = 0 if self.cursor_pos <= 0 else self.cursor_pos - 1
+
+            elif event.key == pygame.K_RIGHT:
+                self.cursor_pos = len(self.text) if self.cursor_pos >= len(self.text) else self.cursor_pos + 1
+
+            elif event.key != pygame.K_TAB:
+                if self.cursor_pos == len(self.text):
+                    self.text = self.check_text_len(self.text + event.unicode)
+                else:
+                    new_text = list(self.text)
+                    new_text.insert(self.cursor_pos, event.unicode)
+                    self.text = self.check_text_len("".join(new_text))
+
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self.active = self.rect.collidepoint(*event.pos)
 
@@ -191,7 +222,44 @@ class TextBox(Label):
 
     def render(self, surface):
         super(TextBox, self).render(surface)
-        if self.active and self.blink:
-            pygame.draw.line(surface, [255 - self.font_color[c] for c in range(3)],
-                             (self.rendered_rect.right + 2, self.rendered_rect.top + 2),
-                             (self.rendered_rect.right + 2, self.rendered_rect.bottom - 2), 2)
+        if self.blink and self.active:
+            pygame.draw.line(surface, [min(255, self.font_color[c] + 60) for c in range(3)],
+                             (self.rect.x + self.font.size(self.text[:self.cursor_pos])[0] + 2,
+                              self.rendered_rect.top + 2),
+                             (self.rect.x + self.font.size(self.text[:self.cursor_pos])[0] + 2,
+                              self.rendered_rect.bottom - 2), 3)
+
+    def check_text_len(self, text):
+        if self.font.size(text)[0] > self.max_len:
+            return self.text
+        self.cursor_pos += 1
+        return text
+
+    def get_active(self):
+        return self.active
+
+    def set_active(self, active):
+        self.active = bool(active)
+
+    def get_done(self):
+        return self.done
+
+    def set_done(self, done):
+        self.done = bool(done)
+#
+#
+# class CheckBox(Button):
+#     def __init__(self, rect, rect_color, font_color):
+#         super().__init__(rect, rect_color, "", font_color)
+#         self.status = False
+#         self.switched = True
+#
+#     def get_event(self, event):
+#         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+#             self.pressed = self.rect.collidepoint(*event.pos)
+#             if self.switched:
+#                 self.status = self.pressed
+#         elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+#             self.pressed = False
+
+
