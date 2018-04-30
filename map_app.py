@@ -1,8 +1,7 @@
 import os
 import requests
-from Projects.Maps_API.gui import *
+from gui import *
 from PIL import Image
-from Projects.Maps_API.spn import SPN
 from io import BytesIO
 
 
@@ -17,28 +16,28 @@ def convert_bytes(bytes_stream):
 class Maps:
     def __init__(self):
         self.lon_lat = "45.016735,53.194065"
-        self.spn = SPN("0.0011,0.04")
+        self.z = "4"
         self.mode = "sat,skl"
         self.mark_ll = ""
         self.text = "Введите поисковый запрос"
 
-    def set_params(self, ll=None, spn=None, mark_ll=None, text=None):
+    def set_params(self, ll=None, z=None, mark_ll=None, text=None):
         if ll is not None:
             self.lon_lat = ll
-        if spn is not None:
-            self.spn.set_spn(spn)
+        if z is not None:
+            self.z = z
         if mark_ll is not None:
             self.mark_ll = mark_ll
         if text is not None:
             self.text = text
 
     def get_params(self, mode="single",
-                   ll=False, spn=False, mark_ll=False, text=False, map_mode=False):
+                   ll=False, z=False, mark_ll=False, text=False, map_mode=False):
         if mode == "single":
             if ll:
                 return self.lon_lat
-            if spn:
-                return self.spn
+            if z:
+                return self.z
             if mark_ll:
                 return self.mark_ll
             if text:
@@ -50,8 +49,8 @@ class Maps:
             result = {}
             if ll:
                 result["ll"] = self.lon_lat
-            if spn:
-                result["spn"] = self.spn
+            if z:
+                result["z"] = self.z
             if mark_ll:
                 result["mark_ll"] = self.mark_ll
             if text:
@@ -78,13 +77,10 @@ class Maps:
         params = {
             "l": self.mode,
             "ll": self.lon_lat,
-            "spn": self.spn.get_spn()
+            "z": self.z
         }
         if self.mark_ll:
             params["pt"] = ",".join((self.mark_ll, "pm2vvm"))
-
-        print("spn in static : {}\n"                                                # <<<===
-              "----------------------------------".format(params["spn"]))             # <<<===
 
         try:
             response = requests.get(static_api_server, params=params)
@@ -117,7 +113,7 @@ class Maps:
             self.text = "Проверьте наличие сети Интернет"
 
 
-def read_json_toponym(json_toponym, ll=False, spn=False, text=False, postal_code=False):
+def read_json_toponym(json_toponym, ll=False, text=False, postal_code=False):
     try:
 
         result = {}
@@ -125,11 +121,6 @@ def read_json_toponym(json_toponym, ll=False, spn=False, text=False, postal_code
 
         if ll:
             result["ll"] = toponym_data["Point"]["pos"].replace(" ", ",")
-        if spn:
-            envelope = toponym_data["boundedBy"]["Envelope"]
-            low_lon, low_lat = map(lambda x: float(x), envelope["lowerCorner"].split())
-            up_lon, up_lat = map(lambda x: float(x), envelope["upperCorner"].split())
-            result["spn"] = str(up_lon - low_lon) + "," + str(up_lat - low_lat)
         if text:
             result["text"] = toponym_data["metaDataProperty"]["GeocoderMetaData"]["text"]
         if postal_code:
@@ -137,7 +128,7 @@ def read_json_toponym(json_toponym, ll=False, spn=False, text=False, postal_code
             if "postal_code" in address:
                 result["postal_code"] = address["postal_code"]
             else:
-                result["postal_code"] = "-"
+                result["postal_code"] = "Не определен"
 
         return result
 
@@ -148,6 +139,8 @@ def read_json_toponym(json_toponym, ll=False, spn=False, text=False, postal_code
 def main():
     bg_color = 45, 20, 15
     fg_color = 245, 250, 115
+    press_left = False
+    press_right = False
 
     app = Maps()
     clock = pygame.time.Clock()
@@ -156,14 +149,18 @@ def main():
     gui = GUI()
 
     search_textbox = TextBox((35, 30, 754, 60), fg_color, bg_color)
-    search_button = ImageButton((803, 25, 74, 74), fg_color, loop, True)
-    status_bar = Label((35, 115, 754, 60), bg_color, "", fg_color, True)
+    search_button = ImageButton((803, 25, 74, 74), fg_color, loop)
+    status_bar = Label((35, 115, 754, 60), bg_color, "", fg_color)
 
-    left_mode = ImageButton((645, 230, 34, 54), fg_color, left_arrow, True)
-    right_mode = ImageButton((851, 230, 34, 54), fg_color, right_arrow, True)
-    current_mode = Label((689, 230, 152, 54), fg_color, app.mode, bg_color, True)
+    left_mode = ImageButton((645, 230, 34, 54), fg_color, left_arrow)
+    right_mode = ImageButton((851, 230, 34, 54), fg_color, right_arrow)
+    current_mode = Label((689, 230, 152, 54), fg_color, app.mode, bg_color)
 
-    reset_button = ImageButton((803, 112, 74, 74), fg_color, cross, True)
+    reset_button = ImageButton((803, 112, 74, 74), fg_color, cross)
+
+    postal_code_mode = Label((645, 324, 174, 54), fg_color, "Индекс", bg_color)
+    postal_code_checkbox = Checkbox((830, 324, 54, 54), fg_color, bg_color)
+    cur_postal_code = Label((645, 388, 239, 60), fg_color, "", bg_color, hidden=True)
 
     gui.add_element(search_button)
     gui.add_element(left_mode)
@@ -172,13 +169,13 @@ def main():
     gui.add_element(search_textbox)
     gui.add_element(status_bar)
     gui.add_element(reset_button)
+    gui.add_element(postal_code_mode)
+    gui.add_element(postal_code_checkbox)
+    gui.add_element(cur_postal_code)
 
     map_image = app.static_request()
 
     running = True
-    press_left = False
-    press_right = False
-    postal_code = False
 
     while running:
         for event in pygame.event.get():
@@ -189,25 +186,29 @@ def main():
                [pygame.K_PAGEUP, pygame.K_PAGEDOWN, pygame.K_LEFT, pygame.K_RIGHT,
                     pygame.K_UP, pygame.K_DOWN] and not search_textbox.get_active():
 
-                params = app.get_params(ll=True, spn=True, mode="dict")
-                cur_ll, cur_spn = params["ll"], params["spn"]
+                data = app.get_params(ll=True, z=True, mode="dict")
+                lon, lat = map(lambda x: float(x), data["ll"].split(","))
+                z = int(data["z"])
 
-                if event.key == pygame.K_PAGEUP:                        # <<<===  Обработка
-                    app.set_params(spn=cur_spn.change_scale(-1))
-                elif event.key == pygame.K_PAGEDOWN:
-                    app.set_params(spn=cur_spn.change_scale(1))
+                shift = [30, 25, 20, 15, 8, 4, 2, 1, 0.5, 0.25, 0.1, 0.05, 0.025, 0.01, 0.005, 0.0025, 0.0001]
 
-                if event.key == pygame.K_LEFT:
-                    app.set_params(ll=cur_spn.move(cur_ll, "h", -1))
-                elif event.key == pygame.K_RIGHT:
-                    app.set_params(ll=cur_spn.move(cur_ll, "h", 1))
+                if event.key == pygame.K_PAGEUP and z < 17:
+                    z = z + 1
+                elif event.key == pygame.K_PAGEDOWN and z > 2:
+                    z = z - 1
 
-                if event.key == pygame.K_DOWN:
-                    app.set_params(ll=cur_spn.move(cur_ll, "v", -1))
-                elif event.key == pygame.K_UP:
-                    app.set_params(ll=cur_spn.move(cur_ll, "v", 1))
+                if event.key == pygame.K_LEFT and lon > 1:
+                    lon = lon - shift[z - 1]
+                elif event.key == pygame.K_RIGHT and lon < 179:
+                    lon = lon + shift[z - 1]
+                if event.key == pygame.K_DOWN and lat > -89:
+                    lat = lat - shift[z - 1]
+                elif event.key == pygame.K_UP and lat < 89:
+                    lat = lat + shift[z - 1]
 
-                map_image = app.static_request()                       # <<<=== Получение картинки
+                app.set_params(ll=str(lon) + "," + str(lat), z=str(z))
+
+                map_image = app.static_request()
 
             gui.get_event(event)
 
@@ -250,11 +251,14 @@ def main():
         if search_textbox.get_done() and search_textbox.get_text():
             request = app.geocoder_request(search_textbox.get_text())
             if request:
-                data = read_json_toponym(request, ll=True, spn=True, text=True, postal_code=postal_code)
+                data = read_json_toponym(request,
+                                         ll=True, text=True, postal_code=True)
+                cur_postal_code.set_text(data["postal_code"])
                 status_bar.set_font_size()
-                app.set_params(ll=data["ll"], mark_ll=data["ll"], spn=data["spn"], text=data["text"])
+                app.set_params(ll=data["ll"], mark_ll=data["ll"], text=data["text"])
                 map_image = app.static_request()
 
+        cur_postal_code.set_hidden(not postal_code_checkbox.get_pressed())
         status_bar.set_text(app.get_params(text=True))
 
     pygame.quit()
